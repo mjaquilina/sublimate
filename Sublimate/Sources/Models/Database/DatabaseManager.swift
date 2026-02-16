@@ -11,6 +11,9 @@ class DatabaseManager {
     private static let databasePathKey = "selectedDatabasePath"
     private static let defaultDatabaseName = "sublimate.db"
 
+    /// Notification posted when the database is switched
+    static let databaseDidSwitchNotification = Notification.Name("DatabaseDidSwitch")
+
     private init() {}
 
     /// Initialize the database at the specified path
@@ -83,6 +86,11 @@ class DatabaseManager {
 
         // Open new database
         try initializeDatabase(at: path)
+
+        // Notify observers that the database has switched
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Self.databaseDidSwitchNotification, object: nil)
+        }
     }
 
     /// Create a new database file with the given name

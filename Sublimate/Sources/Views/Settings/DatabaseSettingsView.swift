@@ -192,6 +192,8 @@ struct DatabaseSettingsView: View {
         do {
             try DatabaseManager.shared.switchDatabase(to: path)
             print("✅ Switched to database: \(path)")
+
+            // Refresh the database list to show the new current database
             viewModel.loadDatabaseFiles()
         } catch {
             errorMessage = "Failed to switch database: \(error.localizedDescription)"

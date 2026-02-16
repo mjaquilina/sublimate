@@ -16,6 +16,7 @@ extension FocusedValues {
 /// Main container view with sidebar navigation
 struct ContentView: View {
     @State private var selectedView: NavigationItem? = .dashboard
+    @State private var databaseVersion = UUID() // Changes when database switches to force view refresh
 
     enum NavigationItem: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
@@ -89,9 +90,13 @@ struct ContentView: View {
                     }
                 }
             }
-            .id(selectedView) // Force NavigationStack to reset when selection changes
+            .id("\(selectedView?.rawValue ?? "none")-\(databaseVersion)") // Force NavigationStack to reset when selection or database changes
         }
         .focusedSceneValue(\.navigationSelection, $selectedView)
+        .onReceive(NotificationCenter.default.publisher(for: DatabaseManager.databaseDidSwitchNotification)) { _ in
+            // Force all views to refresh by updating the database version
+            databaseVersion = UUID()
+        }
     }
 }
 

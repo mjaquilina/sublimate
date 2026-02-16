@@ -14,6 +14,24 @@ class SettingsViewModel: ObservableObject {
     @Published var showingGenerateSampleDataConfirm = false
 
     private var cards: [UUID: Card] = [:]
+    private var databaseSwitchObserver: NSObjectProtocol?
+
+    init() {
+        // Observe database switches and reload data
+        databaseSwitchObserver = NotificationCenter.default.addObserver(
+            forName: DatabaseManager.databaseDidSwitchNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.loadAccountMappings()
+        }
+    }
+
+    deinit {
+        if let observer = databaseSwitchObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     func testYNABConnection(token: String) {
         Task {
