@@ -18,11 +18,6 @@ This is a Swift app built by a web developer. This project is my way of learning
 - **Cash Back Reporting** - Analyze cash back rates by card, spending category, and vendor
 - **YNAB Integration** - Import transactions directly from You Need A Budget
 
-## Known Issues
-
-- **Rebate tracking is a work in progress** - This feature is not fully functional yet.
-- **Implementation currently lacking in performance management** - Sublimate has not yet been tested with a large volume of data. It's safe to assume that some areas of UI will need to be refined to support larger databases, indexes will be needed in the sqlite database, etc.
-
 ## Limitations
 
 - **Transactions can only be entered manually or imported from YNAB** - Currently, Sublimate's design assumes you are already a YNAB user. Transaction import isn't supported via any other method besides manual entry.
