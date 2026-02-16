@@ -141,7 +141,9 @@ struct TransactionsListView: View {
             CreditLinkSheet(transaction: transaction, viewModel: viewModel)
         }
         .sheet(item: $viewingTransaction) { transaction in
-            TransactionDetailView(transaction: transaction)
+            TransactionDetailView(transaction: transaction, onRewardUnlinked: {
+                viewModel.loadTransactions()
+            })
         }
         .alert("Delete Transaction?", isPresented: Binding(
             get: { transactionToDelete != nil },
@@ -289,12 +291,22 @@ struct TransactionOfferProgress: Identifiable {
 
 struct TransactionDetailView: View {
     let transaction: Transaction
+    let onRewardUnlinked: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     @State private var rewards: [TransactionReward] = []
     @State private var creditLink: StatementCreditLink?
     @State private var offerProgress: [TransactionOfferProgress] = []
     @State private var isLoading = true
+    @State private var rewardToUnlink: TransactionReward?
+    @State private var showingUnlinkConfirm = false
+    @State private var unlinkError: String?
+    @State private var showingError = false
+
+    init(transaction: Transaction, onRewardUnlinked: (() -> Void)? = nil) {
+        self.transaction = transaction
+        self.onRewardUnlinked = onRewardUnlinked
+    }
 
     var body: some View {
         NavigationStack {
@@ -338,6 +350,15 @@ struct TransactionDetailView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.green)
                                         }
+                                        Button(action: {
+                                            rewardToUnlink = reward
+                                            showingUnlinkConfirm = true
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Unlink this reward")
                                     }
                                 }
 
@@ -443,6 +464,25 @@ struct TransactionDetailView: View {
         }
         .frame(width: 500, height: 550)
         .onAppear { loadDetails() }
+        .alert("Unlink Reward?", isPresented: $showingUnlinkConfirm) {
+            Button("Cancel", role: .cancel) {
+                rewardToUnlink = nil
+            }
+            Button("Unlink", role: .destructive) {
+                if let reward = rewardToUnlink {
+                    unlinkReward(reward)
+                }
+            }
+        } message: {
+            if let reward = rewardToUnlink {
+                Text("This will remove the \(reward.rewardSourceType.replacingOccurrences(of: "_", with: " ")) reward (\(reward.cashValue.toCurrency())) from this transaction. This action cannot be undone.")
+            }
+        }
+        .alert("Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(unlinkError ?? "An unknown error occurred")
+        }
     }
 
     private func loadDetails() {
@@ -526,6 +566,32 @@ struct TransactionDetailView: View {
                 print("Error loading transaction details: \(error)")
             }
             isLoading = false
+        }
+    }
+
+    private func unlinkReward(_ reward: TransactionReward) {
+        Task {
+            do {
+                let viewModel = TransactionsViewModel()
+                try await viewModel.unlinkReward(reward, from: transaction)
+
+                // Reload details to reflect changes
+                loadDetails()
+
+                // Notify parent to refresh
+                onRewardUnlinked?()
+
+                // Clear the reward to unlink
+                await MainActor.run {
+                    rewardToUnlink = nil
+                }
+            } catch {
+                await MainActor.run {
+                    unlinkError = "Failed to unlink reward: \(error.localizedDescription)"
+                    showingError = true
+                    rewardToUnlink = nil
+                }
+            }
         }
     }
 }

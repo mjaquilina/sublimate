@@ -232,4 +232,55 @@ class TransactionsViewModel: ObservableObject {
             }
         }
     }
+
+    /// Unlink a specific reward from a transaction (e.g., remove a rebate, earning rule, or spend offer reward)
+    func unlinkReward(_ reward: TransactionReward, from transaction: Transaction) async throws {
+        let db = try DatabaseManager.shared.database()
+
+        try await db.write { db in
+            // Reverse the specific reward's effects
+            switch reward.rewardSourceType {
+            case "earning_rule":
+                // Reverse earning rule: subtract from cap spend and point balance
+                let caps = try EarningRuleCap.capsForRule(db, ruleId: reward.rewardSourceId)
+                for cap in caps where transaction.date >= cap.startDate && transaction.date <= cap.endDate {
+                    var mutableCap = cap
+                    mutableCap.currentSpend -= transaction.amount
+                    mutableCap.currentSpend = max(0, mutableCap.currentSpend)
+                    try mutableCap.update(db)
+                }
+
+                // Reverse point balance
+                if let pointTypeId = reward.pointTypeId, let points = reward.pointsEarned {
+                    if var balance = try PointBalance.findByPointType(db, pointTypeId: pointTypeId) {
+                        try balance.adjustBalance(db, by: -points)
+                    }
+                }
+
+            case "spend_offer":
+                // Spend offer progress tracking remains (currentSpend/currentCount)
+                // Only reverse point balance if applicable
+                if let pointTypeId = reward.pointTypeId, let points = reward.pointsEarned {
+                    if var balance = try PointBalance.findByPointType(db, pointTypeId: pointTypeId) {
+                        try balance.adjustBalance(db, by: -points)
+                    }
+                }
+
+            case "rebate":
+                // Restore rebate uses
+                if var rebate = try Rebate.filter(Rebate.Columns.id == reward.rewardSourceId).fetchOne(db) {
+                    if let maxUses = rebate.maxUses {
+                        rebate.usesRemaining = min((rebate.usesRemaining ?? 0) + 1, maxUses)
+                        try rebate.update(db)
+                    }
+                }
+
+            default:
+                break
+            }
+
+            // Delete the reward record
+            try reward.delete(db)
+        }
+    }
 }
