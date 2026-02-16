@@ -41,18 +41,24 @@ struct DatabaseSettingsView: View {
             Divider()
 
             // Database Actions
-            HStack(spacing: 12) {
-                Button(action: { showingCreateDialog = true }) {
-                    Label("Create New Database", systemImage: "plus.circle")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Button(action: { showingCreateDialog = true }) {
+                        Label("Create New Database", systemImage: "plus.circle")
+                    }
+
+                    Button(action: { selectExistingDatabase() }) {
+                        Label("Open Existing Database", systemImage: "folder")
+                    }
+
+                    Button(action: { viewModel.loadDatabaseFiles() }) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
                 }
 
-                Button(action: { selectExistingDatabase() }) {
-                    Label("Open Existing Database", systemImage: "folder")
-                }
-
-                Button(action: { viewModel.loadDatabaseFiles() }) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
+                Text("Database files must be in the app's container. The file picker will open in the correct location.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Divider()
@@ -167,6 +173,11 @@ struct DatabaseSettingsView: View {
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.database]
         panel.message = "Select a database file"
+
+        // Start in the app's database directory (Container/Application Support)
+        if let databaseDir = try? DatabaseManager.shared.getDatabaseDirectory() {
+            panel.directoryURL = databaseDir
+        }
 
         if panel.runModal() == .OK, let url = panel.url {
             switchToDatabase(url.path)

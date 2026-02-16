@@ -66,6 +66,18 @@ class DatabaseManager {
 
     /// Switch to a different database file
     func switchDatabase(to path: String) throws {
+        let fileManager = FileManager.default
+
+        // Check if file exists and is accessible
+        guard fileManager.fileExists(atPath: path) else {
+            throw DatabaseError.fileNotFound
+        }
+
+        // Verify we can read the file (sandboxing check)
+        guard fileManager.isReadableFile(atPath: path) else {
+            throw DatabaseError.noPermission
+        }
+
         // Close current database
         dbQueue = nil
 
@@ -665,10 +677,27 @@ class DatabaseManager {
 
 // MARK: - Custom Errors
 
-enum DatabaseError: Error {
+enum DatabaseError: Error, LocalizedError {
     case notInitialized
     case configurationError
     case fileAlreadyExists
+    case fileNotFound
+    case noPermission
+
+    var errorDescription: String? {
+        switch self {
+        case .notInitialized:
+            return "Database is not initialized"
+        case .configurationError:
+            return "Database configuration error"
+        case .fileAlreadyExists:
+            return "A database file with this name already exists"
+        case .fileNotFound:
+            return "Database file not found"
+        case .noPermission:
+            return "Cannot access this file. Due to app sandboxing, database files must be located in the app's container (Application Support folder). Please create a new database or select a file from the 'Available Databases' list."
+        }
+    }
 }
 
 struct DatabaseFileInfo: Identifiable {
