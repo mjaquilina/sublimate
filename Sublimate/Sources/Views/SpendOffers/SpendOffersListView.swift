@@ -635,6 +635,12 @@ class SpendOfferFormViewModel: ObservableObject {
 
         let matchValuesArray = (matchType == .allSpend || matchType == .allOnline) ? [] : matchValues.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
+        // Normalize dates to avoid time-of-day comparison issues
+        // Start date: beginning of day (midnight)
+        let normalizedStartDate = Calendar.current.startOfDay(for: startDate)
+        // End date: end of day (23:59:59.999)
+        let normalizedEndDate = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+
         return SpendOffer(
             id: existing?.id ?? UUID(),
             cardId: selectedCard.id,
@@ -649,8 +655,8 @@ class SpendOfferFormViewModel: ObservableObject {
             countRequired: offerType == .flatBonusTransactionCount ? Int(transactionCountRequired) : nil,
             transactionMinAmount: offerType == .flatBonusTransactionCount ? Decimal.fromUserInput(transactionMinAmount) : nil,
             pointTypeId: rewardIsPoints ? selectedPointType?.id : nil,
-            startDate: startDate,
-            endDate: endDate,
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
             currentSpend: existing?.currentSpend ?? 0,
             currentCount: existing?.currentCount ?? 0,
             isActive: isActive,
