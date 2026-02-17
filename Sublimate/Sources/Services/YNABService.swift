@@ -125,7 +125,24 @@ class YNABService {
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch let error as NSError {
+            // Handle network-specific errors
+            switch error.code {
+            case NSURLErrorNotConnectedToInternet:
+                throw YNABError.networkError("No internet connection. Please check your network settings.")
+            case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
+                throw YNABError.networkError("Cannot reach YNAB servers. This may be due to app sandbox restrictions. Please ensure the app has network permissions in System Settings > Privacy & Security.")
+            case NSURLErrorTimedOut:
+                throw YNABError.networkError("Connection timed out. Please check your internet connection and try again.")
+            case NSURLErrorSecureConnectionFailed:
+                throw YNABError.networkError("Secure connection failed. Please check your network configuration.")
+            default:
+                throw YNABError.networkError("Network error: \(error.localizedDescription)")
+            }
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw YNABError.invalidResponse
@@ -192,6 +209,7 @@ enum YNABError: LocalizedError {
     case rateLimitExceeded
     case httpError(statusCode: Int)
     case decodingError(Error)
+    case networkError(String)
 
     var errorDescription: String? {
         switch self {
@@ -207,6 +225,8 @@ enum YNABError: LocalizedError {
             return "HTTP error \(statusCode) from YNAB API."
         case .decodingError(let error):
             return "Failed to decode YNAB API response: \(error.localizedDescription)"
+        case .networkError(let message):
+            return message
         }
     }
 }
