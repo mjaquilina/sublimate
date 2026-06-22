@@ -105,33 +105,27 @@ class RewardCalculationEngine {
         }
     }
 
-    /// Reverse cache updates for a transaction being deleted or updated
+    /// Reverses the recorded effects of a transaction on caps, balances, and offer progress.
+    /// Only touches items that have a corresponding TransactionReward record — callers must
+    /// ensure records exist for every offer the transaction contributed to (see applyRewardRecords).
     func reverseTransactionCaches(_ transaction: Transaction) throws {
         try db.write { db in
-            // Get all rewards for this transaction
             let rewards = try TransactionReward.forTransaction(db, transactionId: transaction.id)
 
-            // Track which spend offers were reversed via reward records
-            var reversedOfferIds = Set<UUID>()
-
             for reward in rewards {
-                // Reverse earning rule caps
                 if reward.rewardSourceType == "earning_rule" {
                     let caps = try EarningRuleCap.capsForRule(db, ruleId: reward.rewardSourceId)
                     for cap in caps where transaction.date >= cap.startDate && transaction.date <= cap.endDate {
                         var mutableCap = cap
                         mutableCap.currentSpend -= transaction.amount
-                        mutableCap.currentSpend = max(0, mutableCap.currentSpend) // Prevent negative
+                        mutableCap.currentSpend = max(0, mutableCap.currentSpend)
                         try mutableCap.update(db)
                     }
-
-                    // Reverse point balance
                     if let pointTypeId = reward.pointTypeId, let points = reward.pointsEarned {
                         try updatePointBalance(db, pointTypeId: pointTypeId, amount: -points)
                     }
                 }
 
-                // Reverse spend offer progress and points
                 if reward.rewardSourceType == "spend_offer",
                    var offer = try SpendOffer.filter(SpendOffer.Columns.id == reward.rewardSourceId).fetchOne(db) {
                     offer.currentSpend -= transaction.amount
@@ -139,38 +133,17 @@ class RewardCalculationEngine {
                     offer.currentSpend = max(0, offer.currentSpend)
                     offer.currentCount = max(0, offer.currentCount)
                     try offer.update(db)
-                    reversedOfferIds.insert(offer.id)
-
-                    // Reverse point balance if applicable
                     if let pointTypeId = reward.pointTypeId, let points = reward.pointsEarned {
                         try updatePointBalance(db, pointTypeId: pointTypeId, amount: -points)
                     }
                 }
 
-                // Reverse rebate usage
                 if reward.rewardSourceType == "rebate",
                    var rebate = try Rebate.filter(Rebate.Columns.id == reward.rewardSourceId).fetchOne(db) {
-                    // Increment uses back
                     if let maxUses = rebate.maxUses {
                         rebate.usesRemaining = min((rebate.usesRemaining ?? 0) + 1, maxUses)
                         try rebate.update(db)
                     }
-                }
-            }
-
-            // Also reverse progress for matching offers that didn't produce reward records
-            // (e.g., threshold/count offers where progress was tracked but bonus wasn't triggered)
-            if transaction.isEligibleForRewards {
-                let activeOffers = try SpendOffer.activeOffersForCard(db, cardId: transaction.cardId, date: transaction.date)
-                let matchingOffers = activeOffers.filter { $0.matches(vendor: transaction.vendor, category: transaction.merchantCategory, onlineTransaction: transaction.onlineTransaction) }
-
-                for offer in matchingOffers where !reversedOfferIds.contains(offer.id) {
-                    var mutableOffer = offer
-                    mutableOffer.currentSpend -= transaction.amount
-                    mutableOffer.currentCount -= 1
-                    mutableOffer.currentSpend = max(0, mutableOffer.currentSpend)
-                    mutableOffer.currentCount = max(0, mutableOffer.currentCount)
-                    try mutableOffer.update(db)
                 }
             }
         }
@@ -194,109 +167,117 @@ class RewardCalculationEngine {
 
     /// Update transaction with new data and recalculate rewards
     func updateTransactionWithRewards(_ oldTransaction: Transaction, newTransaction: Transaction) throws {
-        // First, reverse all cache updates from the old transaction
         try reverseTransactionCaches(oldTransaction)
-
         try db.write { db in
-            // Delete old rewards
             let oldRewards = try TransactionReward.forTransaction(db, transactionId: oldTransaction.id)
-            for reward in oldRewards {
-                try reward.delete(db)
-            }
-
-            // Delete old transaction
+            for reward in oldRewards { try reward.delete(db) }
             try oldTransaction.delete(db)
         }
-
-        // Recalculate rewards for new transaction
         let preview = try calculateTransactionRewards(newTransaction)
-
-        // Save new transaction with new rewards
-        try saveTransactionWithRewards(newTransaction, preview: preview)
+        try db.write { db in
+            var mutableTransaction = newTransaction
+            try mutableTransaction.insert(db)
+            try applyRewardRecords(db, transaction: newTransaction, preview: preview)
+        }
     }
 
     /// Save transaction with rewards to database
     func saveTransactionWithRewards(_ transaction: Transaction, preview: TransactionRewardPreview) throws {
         try db.write { db in
-            // Insert transaction
             var mutableTransaction = transaction
             try mutableTransaction.insert(db)
+            try applyRewardRecords(db, transaction: transaction, preview: preview)
+        }
+    }
 
-            // Insert earning rule reward
-            if let earning = preview.earningRuleReward {
-                let reward = TransactionReward(
-                    transactionId: transaction.id,
-                    rewardSourceType: "earning_rule",
-                    rewardSourceId: earning.rule.id,
-                    pointTypeId: earning.pointTypeId,
-                    pointsEarned: earning.pointsEarned,
-                    cashValue: earning.cashValue,
-                    description: earning.rule.name
-                )
-                try reward.insert(db)
+    /// Idempotently recalculates rewards for an already-persisted transaction.
+    /// Reverses existing reward effects via records, deletes those records, then
+    /// recalculates and re-applies. Safe to call on any transaction at any time,
+    /// including as a retroactive backfill when new offers or rules are added.
+    func syncTransactionRewards(_ transaction: Transaction) throws {
+        try reverseTransactionCaches(transaction)
+        try db.write { db in
+            let existing = try TransactionReward.forTransaction(db, transactionId: transaction.id)
+            for reward in existing { try reward.delete(db) }
+        }
+        guard transaction.isEligibleForRewards else { return }
+        let preview = try calculateTransactionRewards(transaction)
+        try db.write { db in
+            try applyRewardRecords(db, transaction: transaction, preview: preview)
+        }
+    }
 
-                // Update point balance
-                if let pointTypeId = earning.pointTypeId, let points = earning.pointsEarned {
-                    try updatePointBalance(db, pointTypeId: pointTypeId, amount: points)
-                }
+    /// Writes reward records and updates all derived state (balances, offer progress, caps).
+    /// Assumes the transaction is already persisted. Always creates a TransactionReward record
+    /// for every matching spend offer — even when cashValue is 0 — so that reverseTransactionCaches
+    /// can undo progress contributions purely from records without guessing what matched.
+    private func applyRewardRecords(_ db: Database, transaction: Transaction, preview: TransactionRewardPreview) throws {
+        if let earning = preview.earningRuleReward {
+            let reward = TransactionReward(
+                transactionId: transaction.id,
+                rewardSourceType: "earning_rule",
+                rewardSourceId: earning.rule.id,
+                pointTypeId: earning.pointTypeId,
+                pointsEarned: earning.pointsEarned,
+                cashValue: earning.cashValue,
+                description: earning.rule.name
+            )
+            try reward.insert(db)
 
-                // Update earning cap spend
-                let caps = try EarningRuleCap.capsForRule(db, ruleId: earning.rule.id)
-                for cap in caps where transaction.date >= cap.startDate && transaction.date <= cap.endDate {
-                    var mutableCap = cap
-                    mutableCap.currentSpend += transaction.amount
-                    try mutableCap.update(db)
-                }
+            if let pointTypeId = earning.pointTypeId, let points = earning.pointsEarned {
+                try updatePointBalance(db, pointTypeId: pointTypeId, amount: points)
             }
 
-            // Insert spend offer rewards and update progress
-            let isRefund = transaction.amount < 0
-            for offerReward in preview.spendOfferRewards {
-                // Only create a reward record if there's non-zero value
-                if offerReward.cashValue != 0 {
-                    let reward = TransactionReward(
-                        transactionId: transaction.id,
-                        rewardSourceType: "spend_offer",
-                        rewardSourceId: offerReward.offer.id,
-                        pointTypeId: offerReward.pointTypeId,
-                        pointsEarned: offerReward.pointsEarned,
-                        cashValue: offerReward.cashValue,
-                        description: offerReward.offer.name
-                    )
-                    try reward.insert(db)
+            let caps = try EarningRuleCap.capsForRule(db, ruleId: earning.rule.id)
+            for cap in caps where transaction.date >= cap.startDate && transaction.date <= cap.endDate {
+                var mutableCap = cap
+                mutableCap.currentSpend += transaction.amount
+                try mutableCap.update(db)
+            }
+        }
 
-                    // Update point balance if applicable
-                    if let pointTypeId = offerReward.pointTypeId, let points = offerReward.pointsEarned {
-                        try updatePointBalance(db, pointTypeId: pointTypeId, amount: points)
-                    }
-                }
+        let isRefund = transaction.amount < 0
+        for offerReward in preview.spendOfferRewards {
+            // Always create a record — even for $0 — so reversal is record-driven.
+            let reward = TransactionReward(
+                transactionId: transaction.id,
+                rewardSourceType: "spend_offer",
+                rewardSourceId: offerReward.offer.id,
+                pointTypeId: offerReward.pointTypeId,
+                pointsEarned: offerReward.pointsEarned,
+                cashValue: offerReward.cashValue,
+                description: offerReward.offer.name
+            )
+            try reward.insert(db)
 
-                // Always update offer progress for matching offers
-                var mutableOffer = offerReward.offer
-                mutableOffer.currentSpend += transaction.amount
-                mutableOffer.currentCount += isRefund ? -1 : 1
-                mutableOffer.currentSpend = max(0, mutableOffer.currentSpend)
-                mutableOffer.currentCount = max(0, mutableOffer.currentCount)
-                try mutableOffer.update(db)
+            if offerReward.cashValue != 0,
+               let pointTypeId = offerReward.pointTypeId,
+               let points = offerReward.pointsEarned {
+                try updatePointBalance(db, pointTypeId: pointTypeId, amount: points)
             }
 
-            // Insert rebate rewards
-            for rebateReward in preview.rebateRewards {
-                let reward = TransactionReward(
-                    transactionId: transaction.id,
-                    rewardSourceType: "rebate",
-                    rewardSourceId: rebateReward.rebate.id,
-                    pointTypeId: nil,
-                    pointsEarned: nil,
-                    cashValue: rebateReward.cashValue,
-                    description: "Rebate: \(rebateReward.rebate.vendor)"
-                )
-                try reward.insert(db)
+            var mutableOffer = offerReward.offer
+            mutableOffer.currentSpend += transaction.amount
+            mutableOffer.currentCount += isRefund ? -1 : 1
+            mutableOffer.currentSpend = max(0, mutableOffer.currentSpend)
+            mutableOffer.currentCount = max(0, mutableOffer.currentCount)
+            try mutableOffer.update(db)
+        }
 
-                // Decrement rebate uses
-                var mutableRebate = rebateReward.rebate
-                try mutableRebate.decrementUse(db)
-            }
+        for rebateReward in preview.rebateRewards {
+            let reward = TransactionReward(
+                transactionId: transaction.id,
+                rewardSourceType: "rebate",
+                rewardSourceId: rebateReward.rebate.id,
+                pointTypeId: nil,
+                pointsEarned: nil,
+                cashValue: rebateReward.cashValue,
+                description: "Rebate: \(rebateReward.rebate.vendor)"
+            )
+            try reward.insert(db)
+
+            var mutableRebate = rebateReward.rebate
+            try mutableRebate.decrementUse(db)
         }
     }
 
@@ -587,6 +568,25 @@ class RewardCalculationEngine {
     func saveBatchTransactionsWithRewards(_ previews: [TransactionRewardPreview]) throws {
         for preview in previews {
             try saveTransactionWithRewards(preview.transaction, preview: preview)
+        }
+    }
+
+    // MARK: - Backfill
+
+    /// Backfills progress and rewards for a newly created spend offer by re-running
+    /// syncTransactionRewards on each eligible transaction in the offer's date range.
+    func backfillNewOffer(_ offer: SpendOffer) throws {
+        let transactions = try db.read { db in
+            try Transaction
+                .filter(Transaction.Columns.cardId == offer.cardId
+                    && Transaction.Columns.date >= offer.startDate
+                    && Transaction.Columns.date <= offer.endDate)
+                .order(Transaction.Columns.date.asc)
+                .fetchAll(db)
+        }
+        for transaction in transactions {
+            guard transaction.isEligibleForRewards else { continue }
+            try syncTransactionRewards(transaction)
         }
     }
 

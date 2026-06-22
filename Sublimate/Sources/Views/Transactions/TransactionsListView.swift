@@ -492,7 +492,10 @@ struct TransactionDetailView: View {
                 let txId = transaction.id
                 let tx = transaction
                 rewards = try await db.read { db in
+                    // Exclude $0 progress-tracking records (used internally by the engine
+                    // to make offer reversal record-driven; they don't represent earned value).
                     try TransactionReward.forTransaction(db, transactionId: txId)
+                        .filter { $0.cashValue > 0 }
                 }
                 if transaction.transactionType == .statementCredit {
                     creditLink = try await db.read { db in

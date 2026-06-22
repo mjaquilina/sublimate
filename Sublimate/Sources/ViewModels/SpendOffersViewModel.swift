@@ -53,7 +53,12 @@ class SpendOffersViewModel: ObservableObject {
                 try await DatabaseManager.shared.write { db in
                     try offer.insert(db)
                 }
-                offers.append(offer)
+
+                let db = try DatabaseManager.shared.database()
+                let engine = RewardCalculationEngine(database: db)
+                try engine.backfillNewOffer(offer)
+
+                loadOffers()
             } catch {
                 print("Error adding offer: \(error)")
             }
