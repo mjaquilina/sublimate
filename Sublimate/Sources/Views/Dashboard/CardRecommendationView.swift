@@ -36,8 +36,7 @@ struct CardRecommendationView: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 
     private func recommendationRow(_ recommendation: CardRecommendation) -> some View {
@@ -79,11 +78,6 @@ struct CardRecommendationView: View {
             }
         }
         .padding()
-        .background(
-            recommendation.rank == 0
-                ? Color.green.opacity(0.1)
-                : Color(.controlBackgroundColor)
-        )
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground(fill: recommendation.rank == 0 ? Color.green.opacity(0.15) : .appCardBackground)
     }
 }

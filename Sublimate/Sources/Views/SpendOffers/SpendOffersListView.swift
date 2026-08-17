@@ -198,8 +198,7 @@ struct SpendOfferCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
         .overlay(
             RoundedRectangle(cornerRadius: Constants.UI.cornerRadius)
                 .stroke(progressValue >= 1.0 && !isExpired ? Color.green : Color.clear, lineWidth: 2)

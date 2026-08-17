@@ -163,14 +163,14 @@ struct CategoryFormView: View {
                     .font(.title2)
                     .foregroundColor(selectedIcon == icon ? .white : .primary)
                     .frame(width: 44, height: 44)
-                    .background(selectedIcon == icon ? Color.accentColor : Color(.controlBackgroundColor))
+                    .background(selectedIcon == icon ? Color.accentColor : Color.primary.opacity(0.08))
                     .cornerRadius(8)
             } else {
                 Text("—")
                     .font(.title2)
                     .foregroundColor(selectedIcon == nil ? .white : .secondary)
                     .frame(width: 44, height: 44)
-                    .background(selectedIcon == nil ? Color.accentColor : Color(.controlBackgroundColor))
+                    .background(selectedIcon == nil ? Color.accentColor : Color.primary.opacity(0.08))
                     .cornerRadius(8)
             }
 

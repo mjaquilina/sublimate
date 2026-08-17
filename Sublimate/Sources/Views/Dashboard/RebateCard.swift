@@ -58,8 +58,7 @@ struct RebateCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
         .overlay(
             RoundedRectangle(cornerRadius: Constants.UI.cornerRadius)
                 .stroke(isExpiringSoon ? Color.orange : Color.clear, lineWidth: 2)

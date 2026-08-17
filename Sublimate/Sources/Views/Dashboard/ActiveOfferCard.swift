@@ -77,8 +77,7 @@ struct ActiveOfferCard: View {
                 .lineLimit(1)
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
         .overlay(
             RoundedRectangle(cornerRadius: Constants.UI.cornerRadius)
                 .stroke(progressValue >= 1.0 ? Color.green : Color.clear, lineWidth: 2)

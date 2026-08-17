@@ -214,8 +214,7 @@ struct CardDetailView: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(Constants.UI.cornerRadius)
+                .cardBackground()
 
                 // Point Types
                 sectionHeader("Point Types", icon: "star.fill") {
@@ -248,8 +247,7 @@ struct CardDetailView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(Constants.UI.cornerRadius)
+                        .cardBackground()
                         .contentShape(Rectangle())
                         .onTapGesture { editingPointType = pointType }
                         .contextMenu {
@@ -300,8 +298,7 @@ struct CardDetailView: View {
                                 .foregroundColor(.blue)
                         }
                         .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(Constants.UI.cornerRadius)
+                        .cardBackground()
                         .contentShape(Rectangle())
                         .onTapGesture { editingEarningRule = rule }
                         .contextMenu {
@@ -361,8 +358,7 @@ struct CardDetailView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(Constants.UI.cornerRadius)
+                        .cardBackground()
                         .contentShape(Rectangle())
                         .onTapGesture { editingEarningCap = cap }
                         .contextMenu {
@@ -470,8 +466,7 @@ struct CardDetailView: View {
                             }
                         }
                     }
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(Constants.UI.cornerRadius)
+                    .cardBackground()
                 }
             }
             .padding(Constants.UI.defaultPadding)
@@ -579,8 +574,7 @@ struct CardDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.controlBackgroundColor).opacity(0.5))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 }
 

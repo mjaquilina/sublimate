@@ -84,8 +84,7 @@ struct RewardPreviewView: View {
             .font(.subheadline)
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 
     private func earningRuleSection(_ earning: EarningRuleReward) -> some View {
@@ -167,8 +166,7 @@ struct RewardPreviewView: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 
     private var rebatesSection: some View {
@@ -242,8 +240,7 @@ struct RewardPreviewView: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 
     private var balanceChangesSection: some View {
@@ -263,7 +260,6 @@ struct RewardPreviewView: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 }

@@ -198,8 +198,7 @@ struct MissedOptimizationCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
     }
 }
 
@@ -246,8 +245,7 @@ struct PacingAlertCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
     }
 }
 
@@ -276,8 +274,7 @@ struct ExpiringOpportunityCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
     }
 }
 
@@ -339,8 +336,7 @@ struct CapWarningCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(warning.progressPercentage >= 95 ? Color.red.opacity(0.3) : Color.orange.opacity(0.3), lineWidth: 2)
@@ -400,8 +396,7 @@ struct SpendingPatternCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
     }
 }
 

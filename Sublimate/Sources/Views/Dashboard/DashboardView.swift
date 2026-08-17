@@ -131,8 +131,7 @@ struct DashboardView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 
     private func sectionHeader(title: String, icon: String) -> some View {

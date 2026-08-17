@@ -39,7 +39,7 @@ struct ReportsView: View {
                 }
             }
             .padding()
-            .background(Color(.controlBackgroundColor))
+            .background(.bar)
 
             // Tab selector
             Picker("Report Type", selection: $selectedTab) {
@@ -258,8 +258,7 @@ struct RewardsBreakdownReport: View {
                             }
                         }
                         .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(Constants.UI.cornerRadius)
+                        .cardBackground()
                     }
                 }
             }
@@ -281,7 +280,6 @@ struct RewardsBreakdownReport: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
     }
 }

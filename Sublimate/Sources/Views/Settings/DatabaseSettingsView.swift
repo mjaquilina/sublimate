@@ -33,8 +33,7 @@ struct DatabaseSettingsView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(8)
+                    .cardBackground(cornerRadius: 8)
                 }
             }
 

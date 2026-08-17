@@ -91,6 +91,7 @@ struct ContentView: View {
                 }
             }
             .id("\(selectedView?.rawValue ?? "none")-\(databaseVersion)") // Force NavigationStack to reset when selection or database changes
+            .background(Color.appPageBackground)
         }
         .focusedSceneValue(\.navigationSelection, $selectedView)
         .onReceive(NotificationCenter.default.publisher(for: DatabaseManager.databaseDidSwitchNotification)) { _ in

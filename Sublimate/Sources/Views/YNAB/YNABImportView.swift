@@ -136,7 +136,7 @@ struct YNABImportView: View {
                 }
             }
             .padding()
-            .background(Color(.controlBackgroundColor))
+            .background(.bar)
 
             // Column headers
             HStack(spacing: 12) {
@@ -221,7 +221,7 @@ struct YNABImportView: View {
                 .buttonStyle(.borderedProminent)
             }
             .padding()
-            .background(Color(.controlBackgroundColor))
+            .background(.bar)
 
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -347,8 +347,7 @@ struct CreditLinkRow: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .cardBackground(cornerRadius: 8)
         .onAppear {
             loadSources()
         }
@@ -500,7 +499,7 @@ struct TransactionReviewRow: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 12)
-        .background(Color(.controlBackgroundColor))
+        .background(.quaternary.opacity(0.5))
     }
 }
 

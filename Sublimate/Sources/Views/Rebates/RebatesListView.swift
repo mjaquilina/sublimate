@@ -200,8 +200,7 @@ struct RebateListCard: View {
             }
         }
         .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(Constants.UI.cornerRadius)
+        .cardBackground()
         .opacity(!rebate.isActive || isExpired || isUsedUp ? 0.7 : 1.0)
     }
 }
