@@ -590,6 +590,84 @@ class RewardCalculationEngine {
         }
     }
 
+    /// Recalculates a single offer's progress and reward records from scratch.
+    ///
+    /// Used when an offer's criteria change (match type, match values, dates, card,
+    /// thresholds), since any of those can change which transactions contribute.
+    ///
+    /// Note this deliberately does *not* replay via syncTransactionRewards. That reverses
+    /// one transaction at a time, so while replaying the first transaction the offer's
+    /// currentSpend still holds every later transaction's un-reversed contribution. For
+    /// threshold offers that inflated total trips the "already met" check in
+    /// calculateSpendOfferReward and silently drops contributions. Clearing the offer's
+    /// records up front and replaying from zero avoids that ordering hazard.
+    ///
+    /// Scoped to this offer only — earning rules, rebates, and caps are left alone.
+    func recalculateOffer(_ offer: SpendOffer) throws {
+        try db.write { db in
+            // 1. Drop this offer's existing reward records, undoing their point effects.
+            //    Not filtered by date: the offer's range or card may have just changed,
+            //    so records can exist outside the current range.
+            let existing = try TransactionReward
+                .filter(TransactionReward.Columns.rewardSourceType == "spend_offer"
+                    && TransactionReward.Columns.rewardSourceId == offer.id)
+                .fetchAll(db)
+
+            for reward in existing {
+                if let pointTypeId = reward.pointTypeId, let points = reward.pointsEarned {
+                    try updatePointBalance(db, pointTypeId: pointTypeId, amount: -points)
+                }
+                try reward.delete(db)
+            }
+
+            // 2. Reset progress before replaying.
+            var working = offer
+            working.currentSpend = 0
+            working.currentCount = 0
+            try working.update(db)
+
+            // 3. Replay every eligible transaction in date order through the same
+            //    logic the incremental path uses, so both produce the same numbers.
+            let transactions = try Transaction
+                .filter(Transaction.Columns.cardId == working.cardId
+                    && Transaction.Columns.date >= working.startDate
+                    && Transaction.Columns.date <= working.endDate)
+                .order(Transaction.Columns.date.asc)
+                .fetchAll(db)
+
+            for transaction in transactions {
+                guard transaction.isEligibleForRewards else { continue }
+                guard working.matches(vendor: transaction.vendor,
+                                      category: transaction.merchantCategory,
+                                      onlineTransaction: transaction.onlineTransaction) else { continue }
+                guard let offerReward = try calculateSpendOfferReward(db, offer: working, transaction: transaction) else { continue }
+
+                let reward = TransactionReward(
+                    transactionId: transaction.id,
+                    rewardSourceType: "spend_offer",
+                    rewardSourceId: working.id,
+                    pointTypeId: offerReward.pointTypeId,
+                    pointsEarned: offerReward.pointsEarned,
+                    cashValue: offerReward.cashValue,
+                    description: working.name
+                )
+                try reward.insert(db)
+
+                if offerReward.cashValue != 0,
+                   let pointTypeId = offerReward.pointTypeId,
+                   let points = offerReward.pointsEarned {
+                    try updatePointBalance(db, pointTypeId: pointTypeId, amount: points)
+                }
+
+                working.currentSpend += transaction.amount
+                working.currentCount += transaction.amount < 0 ? -1 : 1
+                working.currentSpend = max(0, working.currentSpend)
+                working.currentCount = max(0, working.currentCount)
+                try working.update(db)
+            }
+        }
+    }
+
     // MARK: - Repair
 
     /// Recalculates all spend offer progress from existing transactions.

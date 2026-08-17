@@ -75,9 +75,14 @@ class SpendOffersViewModel: ObservableObject {
                     try updatedOffer.update(db)
                 }
 
-                if let index = offers.firstIndex(where: { $0.id == offer.id }) {
-                    offers[index] = updatedOffer
-                }
+                // An edit can change match criteria, dates, card, or thresholds — any of
+                // which changes which transactions contribute — so always recalculate
+                // rather than carrying the stale cached progress forward.
+                let db = try DatabaseManager.shared.database()
+                let engine = RewardCalculationEngine(database: db)
+                try engine.recalculateOffer(updatedOffer)
+
+                loadOffers()
             } catch {
                 print("Error updating offer: \(error)")
             }
